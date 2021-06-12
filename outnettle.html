@@ -1,0 +1,392 @@
+<html>
+<head>
+    <script type="text/javascript"  src="https://unpkg.com/vis-network/standalone/umd/vis-network.min.js"></script>
+    <script type="text/javascript"  src="https://cdn.jsdelivr.net/npm/brython@3.9.0/brython.min.js">     </script>
+    <script type="text/javascript"  src="https://cdnjs.cloudflare.com/ajax/libs/brython/3.8.8/brython_stdlib.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/ace/1.4.12/ace.min.js" type="text/javascript" charset="utf-8"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/js-yaml/4.1.0/js-yaml.min.js" type="text/javascript" charset="utf-8"></script>
+    <link type="text/css" rel="stylesheet" href="splicerStyles.css">
+    <link type="text/css" rel="stylesheet" href="sliderStyles.css">
+
+</head>
+<body onload="brython({debug:1})">
+    <script type="text/python">
+    from browser import document, html, aio, window, load
+    from browser.local_storage import storage
+    from javascript import JSON, jsobj2pyobj
+    from browser.html import *
+
+    from imports.nodeStuff2 import dataAndOptions, getNodes, parseOptions
+    from imports.parseLeft import nodesEdgesOptions, getChunks
+    from imports.parseShorts import makePreNodes, splice, niceReps
+
+    #filename and graphString are GLOBAL
+    #...index.html?filename=whatever
+    filename =  document.query.getfirst('filename') or ''
+    graphString = 'id Welcome'
+
+    ### print and errors will go to console (unless Brython fails)
+    def redirectOutputs():
+        document <= DIV(PRE(ID='console',  contenteditable='true'))
+        import sys
+        class MyOutput:
+            def __init__(self):
+                self.console = document["console"]
+            def write(self, text):
+                self.console.html +=  text + '</hr>'
+        sys.stdout = MyOutput()
+        sys.stderr = MyOutput()
+    redirectOutputs()
+
+    def pythonize(ev):
+        return JSON.parse(JSON.stringify(ev))
+
+    document <= DIV(
+            TABLE(  THEAD(TR( TH('ShortHands' + BR()
+                                +BUTTON('import Options', id='importOptions')
+                                )
+                            +TH('Filename '
+                                + INPUT(filename, id='filename', value=filename)
+                                + BUTTON('Save', id='Save')
+                                + SPAN(id='status')
+                                + BUTTON('Load', id='Load') )
+                            +TH(BUTTON('center', id='Center')
+                                +'Diagram'
+                                +BR()
+                                +BUTTON('Store Positions', id='storePositions')
+                                +BUTTON('Load Positions', id='loadPositions')
+                            )
+                            +TH(BUTTON('Toggle Options ', id='toggle') + 'tweaker'
+                                +BR()
+                                +BUTTON('layout', id='layout')
+                                +BUTTON('nodes', id='nodes')
+                                +BUTTON('edges', id='edges')
+                                +BUTTON('physics', id='physics')
+                                ))
+                        )
+                        +TR (TD('Shorthands!!!',ID='SHORTHANDS',   contenteditable='true')
+                            +TD('Text goes here!!!',ID='LEFT',  contenteditable='true')
+                            +TD(DIV('goes here', id="mynetwork"))
+                            +TD(DIV('tweaker',id='tweaker'))
+                        ),
+                            Class='fixed-headers'),
+
+                    Class='table-scroll')
+
+    def makeEditors(editorNames = ['SHORTHANDS']):
+        """return a list of editors corresponding to the names"""
+        editors=[]
+        for name in editorNames:
+            window.ace.config.set('basePath', 'https://cdnjs.cloudflare.com/ajax/libs/ace/1.4.12/');
+            editor = window.ace.edit(name);
+            editor.setOptions({
+                    'showLineNumbers':False,
+                    'showInvisibles': True,
+                    'useSoftTabs': False})
+            editor.session.setMode("ace/mode/yaml");
+            editors.append(editor)
+        return editors
+    editor, leftEd = makeEditors(['SHORTHANDS', 'LEFT'])
+
+    def loadFileName(ev):
+        global filename
+        filename = document['filename'].value
+        if not filename or not (filename in storage):
+            print('AVAILABLE FILES')
+            filenames = [key for key in storage if not key.endswith('.short')]
+            printStr= ''
+            lenCtr = 0
+            for filename in filenames:
+                printStr += filename + ' '
+                lenCtr += len(filename) + 1
+                if lenCtr > 100:
+                    printStr += '\n'
+                    lenCtr = 0
+            print(printStr)
+            return
+
+        graphString = storage[filename].replace('  ', ' ')  #default  nodes -> default nodes
+        leftEd.setValue(graphString)
+        #leftEd.getSession().foldAll()
+
+        if filename + '.short' in storage:
+            shortHands= storage[filename + '.short']
+            editor.setValue(shortHands)
+
+        document['status'].text = '  loaded'
+        onEdit(ev,loading=True)
+    document['Load'].bind('click', loadFileName)
+
+    def saveFileName(ev):
+        global filename
+        filename = document['filename'].value
+        storage[filename] = leftEd.getValue()#  document['LEFT'].text
+        #print('storage',storage[filename])
+
+        shortHands = editor.getValue()    ;  storage[filename+'.short'] = shortHands
+
+        document['status'].text = '  saved'
+    document['Save'].bind('click', saveFileName)
+
+    defaultOptions = { "physics"  :{"enabled":True},
+                "configure":{"enabled":True},
+                "autoResize": True,
+                "layout":{"improvedLayout": True, "hierarchical":{
+                                              "shakeTowards": 'roots',
+                                              "enabled": True,
+                                              "direction": 'LR',
+                                              "sortMethod": "directed",
+                                              "nodeSpacing":1,
+                                              "treeSpacing":1}},
+                    "edges":{"smooth": True,
+                             "arrows":{"to":True},
+                             "shadow" : True
+                             },
+                     "nodes":{"shape":"box",
+                              "font" :"14px",
+                              "shadow": True
+                             }
+                 };
+    def networkClick(params): #bound via network.on below
+        #print('networkClick', params.nodes)
+        if params.nodes:
+            ID=params.nodes[0]
+            URL = [node['url'] for node in nodes if node['id'] == ID][0]
+            print('URL', URL)
+            if URL:
+                #document['LEFT'].html = URL; # for a moment,
+                aio.run(showFile(URL))       # until this finishes
+
+    def configChange(ev):
+        global options
+        print('configChange', JSON.stringify(ev))
+        parsed = pythonize(ev) #JSON.parse(JSON.stringify(ev))  #
+        for key in parsed: #there should actually be only one key
+            options[key] = parsed[key]
+            #this updates the global object. getOptions will persist them.
+
+    def refreshGraph(graphString='a:b\n',modifiedOptions=None, modifiedData=None):
+        nodes, edges, options = nodesEdgesOptions(graphString)
+        #print('RG options',options)
+
+        data= dict( nodes = nodes,
+                    edges = edges)
+
+        for k,v in options.items(): #augment the default options
+            defaultOptions[k] = v
+
+        options=defaultOptions
+
+        #coerce IDs to string:
+        for i in range(len(data['nodes'])):
+            data['nodes'][i]['id']=str(data['nodes'][i]['id'])
+
+        for i in range(len(data['edges'])):
+            data['edges'][i]['from'] = str(data['edges'][i]['from'])
+            data['edges'][i]['to'] = str(data['edges'][i]['to'])
+
+
+        data['nodes'] = window.vis.DataSet.new(data['nodes'])
+        data['edges'] = window.vis.DataSet.new(data['edges'])
+
+        document['tweaker'].html = ''
+        options['configure']['container'] = document['tweaker']
+        #print('optionKeys', options.keys())
+        #print('RG2 options',options)
+
+
+        network = window.vis.Network.new(document['mynetwork'], data, options)
+        network.on('configChange', configChange)
+        network.on("click", networkClick)  #rebuilt network, so rebuild click
+        return (data, options, network)
+
+    ### initialize for case when no file is pre-specified
+    data, options, network = refreshGraph(graphString)
+
+    async def showFile(src): #works locally and via server
+        # Text file
+        req = await aio.ajax("GET", src)
+        print('showFile', src, req.statusText)
+        if req.statusText == 'OK':
+            content = JSON.parse(req.data)['content']
+            fillLEFT(content)
+
+    def pythonize(ev):
+        return JSON.parse(JSON.stringify(ev))
+
+    def defaultsFromLeftEd():
+        try:
+            defaults = '\n\ndefaults ' + leftEd.getValue().split('defaults',1)[1]
+        except IndexError:
+            defaults = ''
+        return defaults
+
+    def makeGraphString(shortStrings):
+        preNodes = makePreNodes(shortStrings)
+        defaults = defaultsFromLeftEd()
+
+        for i, preNode in enumerate(preNodes):
+            if not preNode['linkto']:
+                preNode.pop('linkto')
+
+
+        newLines= splice(preNodes,priorNodes = pythonize(data['nodes'].get()))
+        return '\n'.join(newLines) + defaults
+
+    lastKeyStroke=0
+    def onShortHands(ev, FORCE=True):
+        global lastKeyStroke, assignedIDs, options
+        now = window.Date.now()
+        if not FORCE:
+            if  now - lastKeyStroke < 300:
+                lastKeyStroke = now
+                return
+        lastKeyStroke = now
+
+        graphString = makeGraphString(shortStrings = editor.getValue() )
+
+        fillLEFT(graphString)
+        onEdit(ev) #parse LEFT pane
+    document['SHORTHANDS'].bind('input', onShortHands)
+
+
+    def onEdit(ev,loading=False):
+        global data, options, network, graphString
+        if not loading:
+            document['status'].text = 'changed'
+        graphString = leftEd.getValue() # document['LEFT'].text
+        data, options, network = refreshGraph(graphString)
+        #network.on("click", networkClick)  #rebuilt network, so rebuild click
+        #network.on('configChange', configChange)
+    document['LEFT'].bind('input',onEdit)
+
+    def fillLEFT(src):
+        """rewrite global graphString and put it in LEFT"""
+        global graphString
+        src=src.strip()
+
+        chunks = src.split('\n\n')
+
+        newChunks = []
+        for chunk in chunks:
+            newChunk=[]
+            for i,line in enumerate(chunk.split('\n')):
+                if i==0:
+                    newLine = line.strip()
+                else:
+                    newLine = '\t' + line.strip()
+                newChunk.append(newLine)
+            newChunk = '\n'.join(newChunk)
+            newChunks.append(newChunk)
+
+        graphString = '\n'.join(newChunks).replace('  ', ' ') #defaults  nodes -> defaults nodes
+        leftEd.setValue(graphString)
+    fillLEFT(graphString)
+
+    def yamlizeOptions():
+        networkOptions = pythonize(network.getOptionsFromConfigurator())
+        return pythonize(window.jsyaml.dump(networkOptions))
+
+    def importOptions(ev):
+        "get options from configureModule, append to ShortHands"
+        optionsYAML = yamlizeOptions()
+        pythonized = pythonize(window.jsyaml.load(optionsYAML))
+        print('test parse', pythonized)
+
+        import collections
+        from functools import reduce
+
+        def flatten(d, parent_key='', sep='_'):
+            items = []
+            for k, v in d.items():
+                new_key = parent_key + sep + k if parent_key else k
+                if isinstance(v, collections.MutableMapping):
+                    items.extend(flatten(v, new_key, sep=sep).items())
+                else:
+                    items.append((new_key, v))
+            return dict(items)
+
+        print('\nflattened')
+        for item in flatten(pythonized).items():
+            print(item)
+
+        optionsYAML = 'options:  ' + '\n  '.join(optionsYAML.split('\n'))
+        #print('OY', optionsYAML)
+        newSH = editor.getValue().split('\noptions:')[0] #remove old options
+        editor.setValue(newSH+'\n\n' + optionsYAML.replace('options:', 'options:\n', 1))
+    document['importOptions'].bind('click', importOptions)
+
+
+    def getOptions(ev=None):
+        global data, options, graphString, network
+        if ev:
+            if ev.target.id == 'toggle':
+                options['configure']['enabled'] = not options['configure']['enabled']
+                if not options['configure']['enabled']:
+                    document['tweaker'].html='tweaker'
+
+            if ev.target.id in 'physics nodes edges layout'.split():
+                document['tweaker'].html='tweaker'
+                options['configure']['enabled']=True
+                options['configure']['filter'] = ev.target.id
+
+            if ev.target.id == 'storePositions': ##this trounces existing FIX
+                parsed = pythonize(network.getPositions())# JSON.parse(JSON.stringify( network.getPositions()))
+                nodes=pythonize(data['nodes'].get())
+                for i,node in enumerate(nodes):
+                    id = node['id']
+                    nodes[i]['x'] = parsed[id]['x']
+                    nodes[i]['y'] = parsed[id]['y']
+                lines = niceReps(nodes)
+                print('defaultsFromLeftEd()',defaultsFromLeftEd())
+                fillLEFT('\n'.join(lines) + defaultsFromLeftEd() )
+
+                network.storePositions() #This is needed.  (but why?)
+                #options['manipulation']= { 'enabled': true } #this turns on interactive editing
+
+        document['tweaker'].html='clear'
+        data, options, network = refreshGraph(graphString, modifiedOptions=options, modifiedData=data) #this will update options
+
+        if ev.target.id == 'loadPositions':
+            loadPositions(ev)
+            network.fit()
+
+        #here...does refreshGraph do this anyway? no
+        #who else does this?
+        #network.on('configChange', configChange)
+        #network.on("click", networkClick)  #rebuilt network, so rebuild click
+
+    def loadPositions(ev):
+        nodes = pythonize(data['nodes'].get())
+        print('LPn', nodes)
+        for node in nodes:
+            data['nodes'].update(node)
+        network.fit()
+    document['loadPositions'].bind('click', loadPositions)
+
+
+    def doSomething(ev):
+        print('doSomething')
+        for node in data['nodes'].get():
+            print(pythonize(node))
+
+        rootREF= window.location.href.split('?')[0]
+        candidates =[key for key in storage if not key.endswith('.short')]
+        for candidate in candidates:
+            document['tweaker'].html = f'<a href={rootREF}?{candidate}>candidate</a>'
+
+    document['console'].bind('dblclick', doSomething)
+
+    def fit(ev):
+        global nework
+        network.fit()
+    document['Center'].bind('click', fit)
+
+    for buttonID in 'physics nodes edges storePositions toggle layout'.split():
+        document[buttonID].bind('click', getOptions)
+
+    loadFileName(filename)
+
+    </script>
+</body>
+</html>
