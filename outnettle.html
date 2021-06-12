@@ -367,13 +367,15 @@
 
     def doSomething(ev):
         print('doSomething')
-        for node in data['nodes'].get():
-            print(pythonize(node))
+        #for node in data['nodes'].get():
+        #    print(pythonize(node))
 
-        rootREF= window.location.href.split('?')[0]
-        candidates =[key for key in storage if not key.endswith('.short')]
-        for candidate in candidates:
-            document['tweaker'].html = f'<a href={rootREF}?{candidate}>candidate</a>'
+        document['tweaker'].style={'width':100}
+
+        #rootREF= window.location.href.split('?')[0]
+        #candidates =[key for key in storage if not key.endswith('.short')]
+        #for candidate in candidates:
+        #    document['tweaker'].html = f'<a href={rootREF}?{candidate}>candidate</a>'
 
     document['console'].bind('dblclick', doSomething)
 

@@ -1,0 +1,10 @@
+modules are routines that are interdependent on each other, but do not need other modules for development or testing.
+
+parseLeft (still doesn't deal with 
+    color blue <followed by>
+    color border blue)
+parseShorts
+Brython HTML and bindings
+other boundroutines 
+
+jupyter nbconvert --to python parseShorts.ipynb generates parseShort.py

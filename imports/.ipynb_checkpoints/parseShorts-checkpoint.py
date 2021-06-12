@@ -4,8 +4,8 @@
 # In[1]:
 
 
-shortStrings = """test
-	one
+shortStrings = """test multi
+	one 
 	two
 """
 
@@ -29,17 +29,18 @@ def newNode(line):
 IDs = set([str(i) for i in range(1000)][1:])
 
 def assignID(preNode,line,lineID, addenda, assignedIDs):
-        if addenda: #CURRENTLY MUST BE MANUALLY INSERTED /ID ZERO
-            IDfromAddenda = addenda.split('ID ')
-            if len(IDfromAddenda)>1:
-                lineID = IDfromAddenda[1].split(' ')[0]
+        if lineID in assignedIDs:
+            print('ID in use')
         else:
-            if lineID==-1 or (lineID in assignedIDs):
-                lineID = list(IDs - assignedIDs)[0]
-        # use lineID
+            print('OK: ID=', lineID)
         preNode['id']= str(lineID)
         assignedIDs.add(lineID)
         return preNode, assignedIDs
+
+# In[ ]:
+
+
+
 
 
 # In[4]:
@@ -81,12 +82,13 @@ def makePreNodes(shortStrings=shortStrings):
         else:
             linkto=''
 
-        words = line.strip().split(' ')
-        if len(words) == 1: #one word Labels become IDs
-            lineID = words[0].strip()
-        else:
-            lineID = -1
+        #words = line.strip().split(' ')
+        #if len(words) == 1: #one word Labels become IDs
+        #    lineID = words[0].strip()
+        #else:
+        #    lineID = -1
             #preNode['ADDENDA']= '/ID ' + lineID
+        lineID = line #this may be multi words but will not include what follows ':'
 
         #### use line and components carefully
         preNode['label']=line.strip()
@@ -119,7 +121,7 @@ def makePreNodes(shortStrings=shortStrings):
             newPreNode['id']=ID
             newPreNode['label']= ID
             preNodes.append(newPreNode)
-
+                         
     return preNodes
 
 makePreNodes()
@@ -207,3 +209,7 @@ if subprocess.run.__doc__:
 
 
 # In[ ]:
+
+
+
+
