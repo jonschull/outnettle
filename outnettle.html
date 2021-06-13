@@ -49,7 +49,10 @@
                                 + INPUT(filename, id='filename', value=filename)
                                 + BUTTON('Save', id='Save')
                                 + SPAN(id='status')
-                                + BUTTON('Load', id='Load') )
+                                + BUTTON('Load', id='Load')
+                                + BR()
+                                + BUTTON(IMG(id='collapse', src='collapseIcon.jpg', height='20px', width='20px'))
+                              )
                             +TH(BUTTON('center', id='Center')
                                 +'Diagram'
                                 +BR()
@@ -72,6 +75,19 @@
                             Class='fixed-headers'),
 
                     Class='table-scroll')
+
+    collapsed=False
+    def collapse(ev):
+      global collapsed
+      if not collapsed:
+        leftEd.getSession().foldAll()
+        collapsed=True
+        document['collapse'].src='expandIcon.jpg'
+      else:
+        leftEd.getSession().unfold()
+        collapsed=False
+        document['collapse'].src='collapseIcon.jpg'
+    document['collapse'].bind('click', collapse)
 
     def makeEditors(editorNames = ['SHORTHANDS']):
         """return a list of editors corresponding to the names"""
@@ -107,7 +123,7 @@
 
         graphString = storage[filename].replace('  ', ' ')  #default  nodes -> default nodes
         leftEd.setValue(graphString)
-        #leftEd.getSession().foldAll()
+
 
         if filename + '.short' in storage:
             shortHands= storage[filename + '.short']
