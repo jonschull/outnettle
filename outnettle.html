@@ -123,6 +123,7 @@
 
         graphString = storage[filename].replace('  ', ' ')  #default  nodes -> default nodes
         leftEd.setValue(graphString)
+        #print(graphString)
 
 
         if filename + '.short' in storage:
@@ -235,9 +236,11 @@
 
     def defaultsFromLeftEd():
         try:
-            defaults = '\n\ndefaults ' + leftEd.getValue().split('defaults',1)[1]
+            defaults = leftEd.getValue().split('defaults')[1:]
+            defaults = '\n\ndefaults' + '\ndefaults'.join(defaults)
         except IndexError:
             defaults = ''
+        print('DEFAULTS', defaults)
         return defaults
 
     def makeGraphString(shortStrings):
@@ -250,6 +253,8 @@
 
 
         newLines= splice(preNodes,priorNodes = pythonize(data['nodes'].get()))
+
+        print('\n'.join(newLines) +  defaults) #at this point newlines are not indented but defaults are
         return '\n'.join(newLines) + defaults
 
     lastKeyStroke=0
