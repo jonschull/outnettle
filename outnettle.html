@@ -179,11 +179,22 @@
 
     def configChange(ev):
         global options
-        print('configChange', JSON.stringify(ev))
-        parsed = pythonize(ev) #JSON.parse(JSON.stringify(ev))  #
+        parsed = pythonize(ev)
+
+        preamble, amble = list(parsed.items())[0]
+        ambleKey, ambleValue = list(amble.items())[0]
+        if type(ambleValue) == type({}):
+          k,v = list(ambleValue.items())[0]
+          ambleValue = f'{k} {v}'
+        print(f'defaults {preamble} \n\t {ambleKey} {ambleValue} ')
+
         for key in parsed: #there should actually be only one key
             options[key] = parsed[key]
             #this updates the global object. getOptions will persist them.
+
+    def dragEnd(ev):
+      storePositions(ev)
+      options['physics']['enabled']=False
 
     def refreshGraph(graphString='a:b\n',modifiedOptions=None, modifiedData=None):
         nodes, edges, options = nodesEdgesOptions(graphString)
@@ -211,13 +222,11 @@
 
         document['tweaker'].html = ''
         options['configure']['container'] = document['tweaker']
-        #print('optionKeys', options.keys())
-        #print('RG2 options',options)
-
 
         network = window.vis.Network.new(document['mynetwork'], data, options)
         network.on('configChange', configChange)
         network.on("click", networkClick)  #rebuilt network, so rebuild click
+        network.on('dragEnd', dragEnd)
         return (data, options, network)
 
     ### initialize for case when no file is pre-specified
@@ -240,7 +249,6 @@
             defaults = '\n\ndefaults' + '\ndefaults'.join(defaults)
         except IndexError:
             defaults = ''
-        print('DEFAULTS', defaults)
         return defaults
 
     def makeGraphString(shortStrings):
@@ -280,8 +288,6 @@
             document['status'].text = 'changed'
         graphString = leftEd.getValue() # document['LEFT'].text
         data, options, network = refreshGraph(graphString)
-        #network.on("click", networkClick)  #rebuilt network, so rebuild click
-        #network.on('configChange', configChange)
     document['LEFT'].bind('input',onEdit)
 
     def fillLEFT(src):
@@ -340,6 +346,16 @@
         editor.setValue(newSH+'\n\n' + optionsYAML.replace('options:', 'options:\n', 1))
     document['importOptions'].bind('click', importOptions)
 
+    def storePositions(ev):
+        parsed = pythonize(network.getPositions())# JSON.parse(JSON.stringify( network.getPositions()))
+        nodes=pythonize(data['nodes'].get())
+        for i,node in enumerate(nodes):
+            id = node['id']
+            nodes[i]['x'] = parsed[id]['x']
+            nodes[i]['y'] = parsed[id]['y']
+        lines = niceReps(nodes)
+        fillLEFT('\n'.join(lines) + defaultsFromLeftEd() )
+        network.storePositions() #This is needed.  (but why?)
 
     def getOptions(ev=None):
         global data, options, graphString, network
@@ -354,19 +370,16 @@
                 options['configure']['enabled']=True
                 options['configure']['filter'] = ev.target.id
 
-            if ev.target.id == 'storePositions': ##this trounces existing FIX
-                parsed = pythonize(network.getPositions())# JSON.parse(JSON.stringify( network.getPositions()))
-                nodes=pythonize(data['nodes'].get())
-                for i,node in enumerate(nodes):
-                    id = node['id']
-                    nodes[i]['x'] = parsed[id]['x']
-                    nodes[i]['y'] = parsed[id]['y']
-                lines = niceReps(nodes)
-                print('defaultsFromLeftEd()',defaultsFromLeftEd())
-                fillLEFT('\n'.join(lines) + defaultsFromLeftEd() )
-
-                network.storePositions() #This is needed.  (but why?)
-                #options['manipulation']= { 'enabled': true } #this turns on interactive editing
+            if ev.target.id == 'storePositions':
+                storePositions(ev)
+                #parsed = pythonize(network.getPositions())# JSON.parse(JSON.stringify( network.getPositions()))
+                #nodes=pythonize(data['nodes'].get())
+                #for i,node in enumerate(nodes):
+                #    id = node['id']
+                #    nodes[i]['x'] = parsed[id]['x']
+                #    nodes[i]['y'] = parsed[id]['y']
+                #lines = niceReps(nodes)
+                #fillLEFT('\n'.join(lines) + defaultsFromLeftEd() )
 
         document['tweaker'].html='clear'
         data, options, network = refreshGraph(graphString, modifiedOptions=options, modifiedData=data) #this will update options
@@ -375,14 +388,8 @@
             loadPositions(ev)
             network.fit()
 
-        #here...does refreshGraph do this anyway? no
-        #who else does this?
-        #network.on('configChange', configChange)
-        #network.on("click", networkClick)  #rebuilt network, so rebuild click
-
     def loadPositions(ev):
         nodes = pythonize(data['nodes'].get())
-        print('LPn', nodes)
         for node in nodes:
             data['nodes'].update(node)
         network.fit()
