@@ -105,7 +105,7 @@
     editor, leftEd = makeEditors(['SHORTHANDS', 'LEFT'])
 
     def loadFileName(ev):
-        global filename
+        global filename, collapsed
         filename = document['filename'].value
         if not filename or not (filename in storage):
             print('AVAILABLE FILES')
@@ -131,6 +131,9 @@
 
         document['status'].text = '  loaded'
         onEdit(ev,loading=True)
+        document['collapse'].src='collapseIcon.jpg'
+        collapsed=False
+
     document['Load'].bind('click', loadFileName)
 
     def saveFileName(ev):
