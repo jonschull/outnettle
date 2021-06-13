@@ -186,7 +186,7 @@
         if type(ambleValue) == type({}):
           k,v = list(ambleValue.items())[0]
           ambleValue = f'{k} {v}'
-        print(f'defaults {preamble} \n\t {ambleKey} {ambleValue} ')
+        print(f'[temporary]\ndefaults {preamble} \n\t {ambleKey} {ambleValue} ')
 
         for key in parsed: #there should actually be only one key
             options[key] = parsed[key]
@@ -194,11 +194,11 @@
 
     def dragEnd(ev):
       storePositions(ev)
-      options['physics']['enabled']=False
+
 
     def refreshGraph(graphString='a:b\n',modifiedOptions=None, modifiedData=None):
         nodes, edges, options = nodesEdgesOptions(graphString)
-        #print('RG options',options)
+        options = modifiedOptions or options
 
         data= dict( nodes = nodes,
                     edges = edges)
@@ -223,10 +223,12 @@
         document['tweaker'].html = ''
         options['configure']['container'] = document['tweaker']
 
+
         network = window.vis.Network.new(document['mynetwork'], data, options)
         network.on('configChange', configChange)
         network.on("click", networkClick)  #rebuilt network, so rebuild click
         network.on('dragEnd', dragEnd)
+        #loadPositions(data)
         return (data, options, network)
 
     ### initialize for case when no file is pre-specified
@@ -288,6 +290,7 @@
             document['status'].text = 'changed'
         graphString = leftEd.getValue() # document['LEFT'].text
         data, options, network = refreshGraph(graphString)
+        loadPositions(data)
     document['LEFT'].bind('input',onEdit)
 
     def fillLEFT(src):
@@ -372,21 +375,13 @@
 
             if ev.target.id == 'storePositions':
                 storePositions(ev)
-                #parsed = pythonize(network.getPositions())# JSON.parse(JSON.stringify( network.getPositions()))
-                #nodes=pythonize(data['nodes'].get())
-                #for i,node in enumerate(nodes):
-                #    id = node['id']
-                #    nodes[i]['x'] = parsed[id]['x']
-                #    nodes[i]['y'] = parsed[id]['y']
-                #lines = niceReps(nodes)
-                #fillLEFT('\n'.join(lines) + defaultsFromLeftEd() )
 
         document['tweaker'].html='clear'
         data, options, network = refreshGraph(graphString, modifiedOptions=options, modifiedData=data) #this will update options
 
         if ev.target.id == 'loadPositions':
-            loadPositions(ev)
-            network.fit()
+            loadPositions(data)
+            #network.fit()
 
     def loadPositions(ev):
         nodes = pythonize(data['nodes'].get())
