@@ -51,7 +51,7 @@
                                 + SPAN(id='status')
                                 + BUTTON('Load', id='Load')
                                 + BR()
-                                + BUTTON(IMG(id='collapse', src='collapseIcon.jpg', height='20px', width='20px'))
+                                + BUTTON(IMG(id='collapse', src='collapseIcon.jpg', height='20px', width='20px'), id='collapseButton')
                               )
                             +TH(BUTTON('center', id='Center')
                                 +'Diagram'
@@ -87,7 +87,7 @@
         leftEd.getSession().unfold()
         collapsed=False
         document['collapse'].src='collapseIcon.jpg'
-    document['collapse'].bind('click', collapse)
+    document['collapseButton'].bind('click', collapse)
 
     def makeEditors(editorNames = ['SHORTHANDS']):
         """return a list of editors corresponding to the names"""
@@ -325,24 +325,6 @@
         optionsYAML = yamlizeOptions()
         pythonized = pythonize(window.jsyaml.load(optionsYAML))
         print('test parse', pythonized)
-
-        import collections
-        from functools import reduce
-
-        def flatten(d, parent_key='', sep='_'):
-            items = []
-            for k, v in d.items():
-                new_key = parent_key + sep + k if parent_key else k
-                if isinstance(v, collections.MutableMapping):
-                    items.extend(flatten(v, new_key, sep=sep).items())
-                else:
-                    items.append((new_key, v))
-            return dict(items)
-
-        print('\nflattened')
-        for item in flatten(pythonized).items():
-            print(item)
-
         optionsYAML = 'options:  ' + '\n  '.join(optionsYAML.split('\n'))
         #print('OY', optionsYAML)
         newSH = editor.getValue().split('\noptions:')[0] #remove old options
